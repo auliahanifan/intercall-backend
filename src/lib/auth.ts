@@ -26,6 +26,7 @@ export const auth = betterAuth({
     provider: "pg",
     schema: schema,
   }),
+  trustedOrigins: ["*"],
   plugins: [
     organization({
       creatorRole: "admin", // Set default organization creator role to admin

@@ -1,5 +1,6 @@
 import "dotenv/config";
 import express from "express";
+import cors from "cors";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
 import { logger } from "./lib/logger";
@@ -12,6 +13,9 @@ app.use((req, res, next) => {
   logger.info("HTTP Request", { method: req.method, path: req.path });
   next();
 });
+
+// CORS middleware - allow all domains
+app.use(cors());
 
 // Parse JSON body before auth handler
 app.use(express.json());
