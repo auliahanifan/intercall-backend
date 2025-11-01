@@ -14,8 +14,14 @@ app.use((req, res, next) => {
   next();
 });
 
-// CORS middleware - allow all domains
-app.use(cors());
+// CORS middleware - allow all domains with credentials support
+const corsOptions = {
+  origin: true, // Allow all origins
+  credentials: true, // Allow credentials (cookies, authorization headers)
+  methods: ["GET", "POST", "PUT", "DELETE", "PATCH", "OPTIONS"],
+  allowedHeaders: ["Content-Type", "Authorization"],
+};
+app.use(cors(corsOptions));
 
 // Parse JSON body before auth handler
 app.use(express.json());
