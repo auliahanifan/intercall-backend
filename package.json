@@ -12,9 +12,9 @@
     "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
+    "@types/bun": "^1.1.8",
     "@types/pg": "^8.15.6",
-    "drizzle-kit": "^0.31.6",
-    "tsx": "^4.20.6"
+    "drizzle-kit": "^0.31.6"
   },
   "peerDependencies": {
     "typescript": "^5"
@@ -29,6 +29,7 @@
     "express": "^5.1.0",
     "pg": "^8.16.3",
     "swagger-jsdoc": "^6.2.8",
-    "swagger-ui-express": "^5.0.1"
+    "swagger-ui-express": "^5.0.1",
+    "tsx": "^4.20.6"
   }
 }
