@@ -12,7 +12,6 @@
     "db:studio": "drizzle-kit studio"
   },
   "devDependencies": {
-    "@types/bun": "^1.1.8",
     "@types/pg": "^8.15.6",
     "drizzle-kit": "^0.31.6",
     "tsx": "^4.20.6"
