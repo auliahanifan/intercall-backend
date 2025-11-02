@@ -3,9 +3,9 @@ import { betterAuth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { db } from "./db";
 import { openAPI, organization } from "better-auth/plugins";
-import { createAuthMiddleware } from "better-auth/api";
 import * as schema from "./schema";
 import { logger } from "./logger";
+import { eq } from "drizzle-orm";
 
 /**
  * Generates a URL-friendly slug from a string
@@ -54,43 +54,37 @@ export const auth = betterAuth({
       prompt: "select_account consent",
     },
   },
-  hooks: {
-    after: createAuthMiddleware(async (ctx: any) => {
-      try {
-        // Create default organization after successful social sign-up
-        // The callback endpoint is used for OAuth redirects
-        if (
-          ctx.path.startsWith("/callback/") ||
-          ctx.path === "/sign-in/social"
-        ) {
-          const newSession = ctx.context.newSession;
-
-          if (newSession?.user) {
-            logger.info("Creating organization for new user", {
-              userId: newSession.user.id,
-              userName: newSession.user.name,
-              userEmail: newSession.user.email,
-              userCreatedAt: newSession.user.createdAt,
+  databaseHooks: {
+    user: {
+      create: {
+        after: async (user) => {
+          try {
+            logger.info("New user created, setting up default organization", {
+              userId: user.id,
+              userName: user.name,
+              userEmail: user.email,
             });
 
-            const organizations = await auth.api.listOrganizations({
-              // This endpoint requires session cookies.
-              headers: ctx.headers,
-            });
+            // Check if user already has organizations
+            const existingOrgs = await db
+              .select()
+              .from(schema.member)
+              .where(eq(schema.member.userId, user.id));
 
-            if (organizations.length == 0) {
-              const orgName = `${newSession.user.name || newSession.user.email}'s Default`;
+            if (existingOrgs.length === 0) {
+              const orgName = `${user.name || user.email}'s Default`;
               let slug = generateSlug(orgName);
               let isSlugAvailable = false;
               let slugAttempt = 0;
 
               // Keep regenerating slug until we find an available one
               while (!isSlugAvailable) {
-                const check = await auth.api.checkOrganizationSlug({
-                  body: { slug },
-                });
+                const existingOrg = await db
+                  .select()
+                  .from(schema.organization)
+                  .where(eq(schema.organization.slug, slug));
 
-                if (check.status) {
+                if (existingOrg.length === 0) {
                   isSlugAvailable = true;
                 } else {
                   // Append a counter to the slug and try again
@@ -99,23 +93,43 @@ export const auth = betterAuth({
                 }
               }
 
-              const data = await auth.api.createOrganization({
-                body: {
-                  name: orgName, // required
-                  slug: slug, // required
-                  userId: newSession.user.id, // server-only
-                  keepCurrentActiveOrganization: false,
-                },
-                // This endpoint requires session cookies.
-                headers: ctx.headers,
-              });
+              // Create organization directly in database
+              const newOrg = await db
+                .insert(schema.organization)
+                .values({
+                  id: `org_${Date.now()}`,
+                  name: orgName,
+                  slug: slug,
+                  createdAt: new Date(),
+                })
+                .returning();
+
+              // Add user as admin member of the new organization
+              if (newOrg.length > 0) {
+                await db.insert(schema.member).values({
+                  id: `member_${Date.now()}`,
+                  organizationId: newOrg[0].id,
+                  userId: user.id,
+                  role: "admin",
+                  createdAt: new Date(),
+                });
+
+                logger.info("Default organization created successfully", {
+                  organizationId: newOrg[0].id,
+                  organizationName: orgName,
+                  organizationSlug: slug,
+                  userId: user.id,
+                });
+              }
             }
+          } catch (error) {
+            logger.error("Error creating default organization:", error);
+            // Don't throw - we don't want to break the user creation flow
           }
-        }
-      } catch (error) {
-        logger.error("Error in signup hook:", error);
-        // Don't throw - we don't want to break the signup flow
-      }
-    }),
+
+          return user;
+        },
+      },
+    },
   },
 });
