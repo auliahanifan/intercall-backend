@@ -22,6 +22,11 @@ function generateSlug(text: string): string {
 export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   secret: process.env.BETTER_AUTH_SECRET || "your-secret-key",
+  trustedOrigins: [
+    "https://intercall-web.vercel.app",
+    "http://localhost:3000",
+    "https://intercall.segarloka.cc",
+  ],
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: schema,
