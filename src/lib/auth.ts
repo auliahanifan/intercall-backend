@@ -23,10 +23,24 @@ export const auth = betterAuth({
   baseURL: process.env.BETTER_AUTH_URL || "http://localhost:3000",
   secret: process.env.BETTER_AUTH_SECRET || "your-secret-key",
   trustedOrigins: [
-    "https://intercall-web.vercel.app",
+    "https://intercall.segarloka.cc", // BACKEND PRODUCTION
+    "https://intercallai.segarloka.cc", // FRONTEND PRODUCTION
     "http://localhost:3000",
-    "https://intercall.segarloka.cc",
   ],
+  session: {
+    cookieCache: {
+      enabled: true,
+      maxAge: 60 * 24 * 60, // 5 minutes
+    },
+  },
+  advanced: {
+    cookiePrefix: "intercall",
+    useSecureCookies: true,
+    crossSubDomainCookies: {
+      enabled: true,
+      domain: ".segarloka.cc", // Ini cuma work kalo frontend juga di subdomain .segarloka.cc
+    },
+  },
   database: drizzleAdapter(db, {
     provider: "pg",
     schema: schema,
