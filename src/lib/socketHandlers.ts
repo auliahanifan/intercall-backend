@@ -1,5 +1,6 @@
 import { Socket } from "socket.io";
 import { logger } from "./logger";
+import { SonioxTranscriptionService } from "./soniox";
 
 /**
  * Example event handlers for Socket.IO
@@ -15,6 +16,9 @@ export interface UserEvent {
   userId: string;
   username: string;
 }
+
+// Map to store Soniox services per socket client
+const sonioxServices = new Map<string, SonioxTranscriptionService>();
 
 /**
  * Handle message events
@@ -130,6 +134,232 @@ export function handleTypingIndicators(socket: Socket) {
 }
 
 /**
+ * Handle transcription start - initialize Soniox connection
+ */
+export function handleTranscriptionStart(socket: Socket) {
+  socket.on("transcription_start", async (callback?: (error?: any) => void) => {
+    try {
+      const clientId = socket.id;
+
+      // Check if already connected
+      if (sonioxServices.has(clientId)) {
+        const error = {
+          error: "Transcription already started",
+          details: "A transcription session is already active for this client",
+        };
+        logger.warn("Transcription start attempted while already active", {
+          clientId,
+        });
+
+        if (callback) {
+          callback(error);
+        }
+        socket.emit("transcription_error", error);
+        return;
+      }
+
+      // Create and connect Soniox service
+      const service = new SonioxTranscriptionService(clientId);
+
+      await service.connect(
+        (result) => {
+          // Send transcription result back to client
+          socket.emit("transcription_result", result);
+        },
+        (error) => {
+          // Send error back to client
+          socket.emit("transcription_error", error);
+        }
+      );
+
+      sonioxServices.set(clientId, service);
+
+      logger.info("Transcription started", { clientId });
+
+      if (callback) {
+        callback();
+      }
+
+      socket.emit("transcription_started", { status: "connected" });
+    } catch (error) {
+      const errorMsg = {
+        error: "Failed to start transcription",
+        details: error instanceof Error ? error.message : String(error),
+      };
+
+      logger.error("Transcription start error", {
+        clientId: socket.id,
+        error: errorMsg,
+      });
+
+      if (callback) {
+        callback(errorMsg);
+      }
+
+      socket.emit("transcription_error", errorMsg);
+    }
+  });
+}
+
+/**
+ * Handle audio chunks - forward to Soniox
+ */
+export function handleAudioChunk(socket: Socket) {
+  socket.on("audio_chunk", (data: Uint8Array, callback?: (error?: any) => void) => {
+    try {
+      const clientId = socket.id;
+      const service = sonioxServices.get(clientId);
+
+      if (!service) {
+        const error = {
+          error: "Transcription not started",
+          details: "Call transcription_start before sending audio chunks",
+        };
+
+        logger.warn("Audio chunk received without active transcription", {
+          clientId,
+        });
+
+        if (callback) {
+          callback(error);
+        }
+
+        socket.emit("transcription_error", error);
+        return;
+      }
+
+      // Validate audio data
+      if (!data || data.length === 0) {
+        const error = {
+          error: "Invalid audio data",
+          details: "Audio chunk is empty or invalid",
+        };
+
+        logger.warn("Invalid audio chunk received", { clientId });
+
+        if (callback) {
+          callback(error);
+        }
+
+        return;
+      }
+
+      // Send audio to Soniox
+      service.sendAudio(data);
+
+      logger.debug("Audio chunk sent to Soniox", {
+        clientId,
+        size: data.length,
+      });
+
+      if (callback) {
+        callback();
+      }
+    } catch (error) {
+      const errorMsg = {
+        error: "Failed to process audio chunk",
+        details: error instanceof Error ? error.message : String(error),
+      };
+
+      logger.error("Audio chunk processing error", {
+        clientId: socket.id,
+        error: errorMsg,
+      });
+
+      if (callback) {
+        callback(errorMsg);
+      }
+
+      socket.emit("transcription_error", errorMsg);
+    }
+  });
+}
+
+/**
+ * Handle transcription stop - close Soniox connection
+ */
+export function handleTranscriptionStop(socket: Socket) {
+  socket.on("transcription_stop", async (callback?: (error?: any) => void) => {
+    try {
+      const clientId = socket.id;
+      const service = sonioxServices.get(clientId);
+
+      if (!service) {
+        const error = {
+          error: "No active transcription",
+          details: "There is no active transcription session to stop",
+        };
+
+        logger.warn("Transcription stop attempted without active session", {
+          clientId,
+        });
+
+        if (callback) {
+          callback(error);
+        }
+
+        socket.emit("transcription_error", error);
+        return;
+      }
+
+      await service.close();
+      sonioxServices.delete(clientId);
+
+      logger.info("Transcription stopped", { clientId });
+
+      if (callback) {
+        callback();
+      }
+
+      socket.emit("transcription_stopped", { status: "disconnected" });
+    } catch (error) {
+      const errorMsg = {
+        error: "Failed to stop transcription",
+        details: error instanceof Error ? error.message : String(error),
+      };
+
+      logger.error("Transcription stop error", {
+        clientId: socket.id,
+        error: errorMsg,
+      });
+
+      if (callback) {
+        callback(errorMsg);
+      }
+
+      socket.emit("transcription_error", errorMsg);
+    }
+  });
+}
+
+/**
+ * Clean up Soniox connection on disconnect
+ */
+export function handleDisconnect(socket: Socket) {
+  socket.on("disconnect", async (reason: string) => {
+    try {
+      const clientId = socket.id;
+      const service = sonioxServices.get(clientId);
+
+      if (service) {
+        await service.close();
+        sonioxServices.delete(clientId);
+
+        logger.info("Soniox connection cleaned up on disconnect", {
+          clientId,
+          reason,
+        });
+      }
+    } catch (error) {
+      logger.error("Error cleaning up Soniox connection", {
+        clientId: socket.id,
+        error,
+      });
+    }
+  });
+}
+
+/**
  * Initialize all event handlers for a socket connection
  */
 export function initializeSocketHandlers(socket: Socket) {
@@ -137,4 +367,8 @@ export function initializeSocketHandlers(socket: Socket) {
   handleUserPresence(socket);
   handleRoomEvents(socket);
   handleTypingIndicators(socket);
+  handleTranscriptionStart(socket);
+  handleAudioChunk(socket);
+  handleTranscriptionStop(socket);
+  handleDisconnect(socket);
 }
