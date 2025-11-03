@@ -32,6 +32,8 @@ export class SonioxProvider implements ITranscriptionProvider {
 
         this.ws = new WebSocket(wsUrl);
 
+        let resolved = false;
+
         this.ws.on("open", () => {
           this.logger.info("Soniox WebSocket connected", {
             clientId: this.clientId,
@@ -47,8 +49,22 @@ export class SonioxProvider implements ITranscriptionProvider {
             language_code: "en-US",
           };
 
-          this.ws!.send(JSON.stringify(config));
-          resolve();
+          try {
+            this.ws!.send(JSON.stringify(config));
+            if (!resolved) {
+              resolved = true;
+              resolve();
+            }
+          } catch (sendError) {
+            this.logger.error("Failed to send config to Soniox", {
+              clientId: this.clientId,
+              error: sendError,
+            });
+            if (!resolved) {
+              resolved = true;
+              reject(sendError);
+            }
+          }
         });
 
         this.ws.on("message", (data: WebSocket.Data) => {
@@ -69,7 +85,10 @@ export class SonioxProvider implements ITranscriptionProvider {
             });
           }
 
-          reject(error);
+          if (!resolved) {
+            resolved = true;
+            reject(error);
+          }
         });
 
         this.ws.on("close", () => {
