@@ -45,10 +45,14 @@ export class SonioxProvider implements ITranscriptionProvider {
           const sendConfig = () => {
             const config = {
               api_key: this.apiKey,
-              model: "stt-rt-preview",
-              audio_format: "pcm16",
-              sample_rate_hertz: 48000,
-              language_code: "en-US",
+              model: "stt-rt-v3",
+              audio_format: "pcm_s16le",
+              sample_rate: 16000,
+              num_channels: 1,
+              language_hints: ["en"],
+              enable_language_identification: true,
+              enable_speaker_diarization: true,
+              enable_endpoint_detection: true,
             };
 
             try {
@@ -198,16 +202,17 @@ export class SonioxProvider implements ITranscriptionProvider {
         const response = JSON.parse(data);
 
         // Check for error response
-        if (response.error) {
+        if (response.error_code) {
           this.logger.error("Soniox returned error", {
             clientId: this.clientId,
-            error: response.error,
+            error_code: response.error_code,
+            error_message: response.error_message,
           });
 
           if (this.errorCallback) {
             this.errorCallback({
-              error: response.error,
-              details: response.details || undefined,
+              error: response.error_message || response.error_code,
+              details: undefined,
             });
           }
           return;
@@ -230,6 +235,13 @@ export class SonioxProvider implements ITranscriptionProvider {
           if (this.resultCallback) {
             this.resultCallback(result);
           }
+        }
+
+        // Check if session is finished
+        if (response.finished) {
+          this.logger.info("Soniox session finished", {
+            clientId: this.clientId,
+          });
         }
       }
     } catch (error) {
