@@ -33,6 +33,7 @@ export class SonioxProvider implements ITranscriptionProvider {
         this.ws = new WebSocket(wsUrl);
 
         let resolved = false;
+        let hasError = false;
 
         this.ws.on("open", () => {
           this.logger.info("Soniox WebSocket connected", {
@@ -40,31 +41,41 @@ export class SonioxProvider implements ITranscriptionProvider {
           });
           this.isConnectedStatus = true;
 
-          // Send configuration message
-          const config = {
-            api_key: this.apiKey,
-            model: "stt-rt-preview",
-            audio_format: "pcm16",
-            sample_rate_hertz: 48000,
-            language_code: "en-US",
+          // Send configuration message with retry logic
+          const sendConfig = () => {
+            const config = {
+              api_key: this.apiKey,
+              model: "stt-rt-preview",
+              audio_format: "pcm16",
+              sample_rate_hertz: 48000,
+              language_code: "en-US",
+            };
+
+            try {
+              // Check readyState before sending
+              if (this.ws && this.ws.readyState === WebSocket.OPEN) {
+                this.ws.send(JSON.stringify(config));
+                if (!resolved && !hasError) {
+                  resolved = true;
+                  resolve();
+                }
+              } else {
+                // Retry after a short delay
+                setTimeout(sendConfig, 50);
+              }
+            } catch (sendError) {
+              this.logger.error("Failed to send config to Soniox", {
+                clientId: this.clientId,
+                error: sendError,
+              });
+              if (!resolved && !hasError) {
+                hasError = true;
+                reject(sendError);
+              }
+            }
           };
 
-          try {
-            this.ws!.send(JSON.stringify(config));
-            if (!resolved) {
-              resolved = true;
-              resolve();
-            }
-          } catch (sendError) {
-            this.logger.error("Failed to send config to Soniox", {
-              clientId: this.clientId,
-              error: sendError,
-            });
-            if (!resolved) {
-              resolved = true;
-              reject(sendError);
-            }
-          }
+          sendConfig();
         });
 
         this.ws.on("message", (data: WebSocket.Data) => {
@@ -85,8 +96,8 @@ export class SonioxProvider implements ITranscriptionProvider {
             });
           }
 
-          if (!resolved) {
-            resolved = true;
+          if (!resolved && !hasError) {
+            hasError = true;
             reject(error);
           }
         });
