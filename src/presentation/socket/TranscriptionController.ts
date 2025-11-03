@@ -20,7 +20,7 @@ export class TranscriptionController {
   handleTranscriptionStart = (socket: Socket) => {
     socket.on(
       "transcription_start",
-      async (callback?: (error?: any) => void) => {
+      async (callback?: (error: any) => void) => {
         try {
           const clientId = socket.id;
 
@@ -35,8 +35,9 @@ export class TranscriptionController {
             sessionId: session.id.toString(),
           });
 
+          // Acknowledge success to client
           if (typeof callback === "function") {
-            callback();
+            callback(null);
           }
 
           socket.emit("transcription_started", {
@@ -51,6 +52,7 @@ export class TranscriptionController {
 
           this.logger.error("Transcription start error", errorMsg);
 
+          // Acknowledge error to client
           if (typeof callback === "function") {
             callback(errorMsg);
           }
@@ -65,15 +67,16 @@ export class TranscriptionController {
    * Handle audio_chunk event
    */
   handleAudioChunk = (socket: Socket) => {
-    socket.on("audio_chunk", async (data: Uint8Array, callback?: (error?: any) => void) => {
+    socket.on("audio_chunk", async (data: Uint8Array, callback?: (error: any) => void) => {
       try {
         const clientId = socket.id;
 
         // Process audio chunk use case
         await this.processAudioChunk.execute(clientId, data);
 
+        // Acknowledge success to client
         if (typeof callback === "function") {
-          callback();
+          callback(null);
         }
       } catch (error) {
         const errorMsg = {
@@ -83,6 +86,7 @@ export class TranscriptionController {
 
         this.logger.error("Audio chunk processing error", errorMsg);
 
+        // Acknowledge error to client
         if (typeof callback === "function") {
           callback(errorMsg);
         }
@@ -96,7 +100,7 @@ export class TranscriptionController {
    * Handle transcription_stop event
    */
   handleTranscriptionStop = (socket: Socket) => {
-    socket.on("transcription_stop", async (callback?: (error?: any) => void) => {
+    socket.on("transcription_stop", async (callback?: (error: any) => void) => {
       try {
         const clientId = socket.id;
 
@@ -108,8 +112,9 @@ export class TranscriptionController {
           sessionId: session.id.toString(),
         });
 
+        // Acknowledge success to client
         if (typeof callback === "function") {
-          callback();
+          callback(null);
         }
 
         socket.emit("transcription_stopped", {
@@ -125,6 +130,7 @@ export class TranscriptionController {
 
         this.logger.error("Transcription stop error", errorMsg);
 
+        // Acknowledge error to client
         if (typeof callback === "function") {
           callback(errorMsg);
         }
