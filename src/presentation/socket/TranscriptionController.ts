@@ -35,7 +35,7 @@ export class TranscriptionController {
             sessionId: session.id.toString(),
           });
 
-          if (callback) {
+          if (typeof callback === "function") {
             callback();
           }
 
@@ -51,7 +51,7 @@ export class TranscriptionController {
 
           this.logger.error("Transcription start error", errorMsg);
 
-          if (callback) {
+          if (typeof callback === "function") {
             callback(errorMsg);
           }
 
@@ -72,7 +72,7 @@ export class TranscriptionController {
         // Process audio chunk use case
         await this.processAudioChunk.execute(clientId, data);
 
-        if (callback) {
+        if (typeof callback === "function") {
           callback();
         }
       } catch (error) {
@@ -83,7 +83,7 @@ export class TranscriptionController {
 
         this.logger.error("Audio chunk processing error", errorMsg);
 
-        if (callback) {
+        if (typeof callback === "function") {
           callback(errorMsg);
         }
 
@@ -108,7 +108,7 @@ export class TranscriptionController {
           sessionId: session.id.toString(),
         });
 
-        if (callback) {
+        if (typeof callback === "function") {
           callback();
         }
 
@@ -125,7 +125,7 @@ export class TranscriptionController {
 
         this.logger.error("Transcription stop error", errorMsg);
 
-        if (callback) {
+        if (typeof callback === "function") {
           callback(errorMsg);
         }
 
