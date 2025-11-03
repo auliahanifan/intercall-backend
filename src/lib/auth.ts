@@ -25,7 +25,8 @@ export const auth = betterAuth({
   trustedOrigins: [
     "https://intercall.segarloka.cc", // BACKEND PRODUCTION
     "https://intercallai.segarloka.cc", // FRONTEND PRODUCTION
-    "http://localhost:3000",
+    "http://localhost:3000", // express
+    "http://localhost:8080", // vite
   ],
   session: {
     cookieCache: {

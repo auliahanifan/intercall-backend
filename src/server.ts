@@ -1,12 +1,18 @@
 import "dotenv/config";
 import express from "express";
 import cors from "cors";
+import { createServer } from "http";
 import { toNodeHandler } from "better-auth/node";
 import { auth } from "./lib/auth";
 import { logger } from "./lib/logger";
+import { initializeSocketIO } from "./lib/socket";
 
 const app = express();
+const httpServer = createServer(app);
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+
+// Initialize Socket.IO
+initializeSocketIO(httpServer);
 
 // Request logging FIRST
 app.use((req, res, next) => {
@@ -66,6 +72,6 @@ app.use(
   },
 );
 
-app.listen(port, () => {
+httpServer.listen(port, () => {
   logger.info("Server started", { port });
 });
