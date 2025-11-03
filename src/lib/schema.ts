@@ -1,4 +1,4 @@
-import { pgTable, text, timestamp, boolean, jsonb } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, jsonb, uuid } from "drizzle-orm/pg-core";
 
 export const user = pgTable("user", {
   id: text("id").primaryKey(),
@@ -94,4 +94,24 @@ export const invitation = pgTable("invitation", {
   inviterId: text("inviter_id")
     .notNull()
     .references(() => user.id, { onDelete: "cascade" }),
+});
+
+export const transcriptionSession = pgTable("transcription_session", {
+  id: text("id").primaryKey(),
+  socketId: text("socket_id").notNull(),
+  status: text("status").notNull(), // pending, active, stopping, stopped, error
+  audioFormat: text("audio_format").notNull(), // pcm16
+  sampleRate: text("sample_rate").notNull(), // 48000
+  channels: text("channels").notNull(), // 1
+  bitDepth: text("bit_depth").notNull(), // 16
+  transcribedText: text("transcribed_text").default("").notNull(),
+  results: jsonb("results").default([]).notNull(), // Array of ITranscriptionToken
+  errorMessage: text("error_message"),
+  startedAt: timestamp("started_at").defaultNow().notNull(),
+  endedAt: timestamp("ended_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => /* @__PURE__ */ new Date())
+    .notNull(),
 });

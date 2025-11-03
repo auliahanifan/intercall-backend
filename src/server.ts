@@ -3,13 +3,18 @@ import express from "express";
 import cors from "cors";
 import { createServer } from "http";
 import { toNodeHandler } from "better-auth/node";
-import { auth } from "./lib/auth";
-import { logger } from "./lib/logger";
-import { initializeSocketIO } from "./lib/socket";
+import { auth } from "./lib/auth.js";
+import { logger } from "./lib/logger.js";
+import { db } from "./lib/db.js";
+import { initializeSocketIO } from "./lib/socket.js";
+import { DependencyFactory } from "./config/DependencyFactory.js";
 
 const app = express();
 const httpServer = createServer(app);
 const port = process.env.PORT ? parseInt(process.env.PORT) : 3000;
+
+// Initialize Dependency Factory (composition root)
+DependencyFactory.initialize(db);
 
 // Initialize Socket.IO
 initializeSocketIO(httpServer);

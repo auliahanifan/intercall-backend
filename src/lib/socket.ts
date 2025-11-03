@@ -1,10 +1,14 @@
 import { Server as HTTPServer } from "http";
 import { Server as SocketIOServer, Socket } from "socket.io";
-import { logger } from "./logger";
-import { initializeSocketHandlers } from "./socketHandlers";
+import { logger } from "./logger.js";
+import { DependencyFactory } from "../config/DependencyFactory.js";
+import { TranscriptionController } from "../presentation/socket/TranscriptionController.js";
 
 let io: SocketIOServer | null = null;
 
+/**
+ * Initialize Socket.IO with Clean Architecture controllers
+ */
 export function initializeSocketIO(httpServer: HTTPServer) {
   io = new SocketIOServer(httpServer, {
     cors: {
@@ -31,16 +35,15 @@ export function initializeSocketIO(httpServer: HTTPServer) {
       remoteAddress: socket.handshake.address,
     });
 
-    // Initialize all event handlers for this socket
-    initializeSocketHandlers(socket);
+    // Initialize transcription controller with dependency injection
+    const transcriptionController =
+      DependencyFactory.getInstance().createTranscriptionController(socket.id);
 
-    // Disconnect handler
-    socket.on("disconnect", (reason: string) => {
-      logger.info("Socket.IO client disconnected", {
-        socketId: socket.id,
-        reason,
-      });
-    });
+    // Register transcription event handlers
+    transcriptionController.handleTranscriptionStart(socket);
+    transcriptionController.handleAudioChunk(socket);
+    transcriptionController.handleTranscriptionStop(socket);
+    transcriptionController.handleDisconnect(socket);
 
     // Error handler
     socket.on("error", (error: any) => {
@@ -51,7 +54,7 @@ export function initializeSocketIO(httpServer: HTTPServer) {
     });
   });
 
-  logger.info("Socket.IO initialized");
+  logger.info("Socket.IO initialized with Clean Architecture");
   return io;
 }
 
