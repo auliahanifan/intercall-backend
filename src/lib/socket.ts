@@ -40,9 +40,7 @@ export function initializeSocketIO(httpServer: HTTPServer) {
       DependencyFactory.getInstance().createTranscriptionController(socket.id);
 
     // Register transcription event handlers
-    transcriptionController.handleTranscriptionStart(socket);
     transcriptionController.handleAudioChunk(socket);
-    transcriptionController.handleTranscriptionStop(socket);
     transcriptionController.handleDisconnect(socket);
 
     // Error handler

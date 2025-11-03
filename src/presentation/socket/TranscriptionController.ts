@@ -15,53 +15,25 @@ export class TranscriptionController {
   ) {}
 
   /**
-   * Handle transcription_start event
+   * Auto-initialize transcription on first connection
    */
-  handleTranscriptionStart = (socket: Socket) => {
-    socket.on(
-      "transcription_start",
-      async (callback?: (error: any) => void) => {
-        try {
-          const clientId = socket.id;
+  private async initializeTranscription(clientId: string, socket: Socket): Promise<void> {
+    try {
+      // Start transcription use case
+      const session = await this.startTranscription.execute(clientId);
 
-          // Start transcription use case
-          const session = await this.startTranscription.execute(clientId);
+      // Setup event listeners for this provider
+      this.setupProviderListeners(socket, session.id.toString());
 
-          // Setup event listeners for this provider
-          this.setupProviderListeners(socket, session.id.toString());
-
-          this.logger.info("Transcription started via controller", {
-            clientId,
-            sessionId: session.id.toString(),
-          });
-
-          // Acknowledge success to client
-          if (typeof callback === "function") {
-            callback(null);
-          }
-
-          socket.emit("transcription_started", {
-            sessionId: session.id.toString(),
-            status: "connected",
-          });
-        } catch (error) {
-          const errorMsg = {
-            error: "Failed to start transcription",
-            details: error instanceof Error ? error.message : String(error),
-          };
-
-          this.logger.error("Transcription start error", errorMsg);
-
-          // Acknowledge error to client
-          if (typeof callback === "function") {
-            callback(errorMsg);
-          }
-
-          socket.emit("transcription_error", errorMsg);
-        }
-      }
-    );
-  };
+      this.logger.info("Transcription initialized", {
+        clientId,
+        sessionId: session.id.toString(),
+      });
+    } catch (error) {
+      this.logger.error("Failed to initialize transcription", error);
+      throw error;
+    }
+  }
 
   /**
    * Handle audio_chunk event
@@ -70,6 +42,17 @@ export class TranscriptionController {
     socket.on("audio_chunk", async (data: Uint8Array, callback?: (error: any) => void) => {
       try {
         const clientId = socket.id;
+
+        // Initialize transcription on first chunk if not already done
+        try {
+          await this.initializeTranscription(clientId, socket);
+        } catch (initError) {
+          // If initialization fails, acknowledge and return
+          if (typeof callback === "function") {
+            callback(initError instanceof Error ? initError : new Error(String(initError)));
+          }
+          return;
+        }
 
         // Process audio chunk use case
         await this.processAudioChunk.execute(clientId, data);
@@ -90,55 +73,10 @@ export class TranscriptionController {
         if (typeof callback === "function") {
           callback(errorMsg);
         }
-
-        socket.emit("transcription_error", errorMsg);
       }
     });
   };
 
-  /**
-   * Handle transcription_stop event
-   */
-  handleTranscriptionStop = (socket: Socket) => {
-    socket.on("transcription_stop", async (callback?: (error: any) => void) => {
-      try {
-        const clientId = socket.id;
-
-        // Stop transcription use case
-        const session = await this.stopTranscription.execute(clientId);
-
-        this.logger.info("Transcription stopped via controller", {
-          clientId,
-          sessionId: session.id.toString(),
-        });
-
-        // Acknowledge success to client
-        if (typeof callback === "function") {
-          callback(null);
-        }
-
-        socket.emit("transcription_stopped", {
-          sessionId: session.id.toString(),
-          status: "disconnected",
-          transcribedText: session.getTranscribedText(),
-        });
-      } catch (error) {
-        const errorMsg = {
-          error: "Failed to stop transcription",
-          details: error instanceof Error ? error.message : String(error),
-        };
-
-        this.logger.error("Transcription stop error", errorMsg);
-
-        // Acknowledge error to client
-        if (typeof callback === "function") {
-          callback(errorMsg);
-        }
-
-        socket.emit("transcription_error", errorMsg);
-      }
-    });
-  };
 
   /**
    * Handle disconnect and cleanup
@@ -166,27 +104,9 @@ export class TranscriptionController {
   };
 
   /**
-   * Setup provider event listeners to emit results back to client
+   * Setup provider event listeners
    */
   private setupProviderListeners(socket: Socket, sessionId: string): void {
-    // This is a bit of a workaround: we need to forward provider results to the socket
-    // The provider was already connected in StartTranscription use case,
-    // so we just setup the socket listeners here
-    // Results from provider will be emitted back via "transcription_result" event
-    // (This is handled via callbacks passed to provider.connect())
-  }
-
-  /**
-   * Forward transcription result from provider to client socket
-   */
-  forwardTranscriptionResult(socket: Socket, result: any): void {
-    socket.emit("transcription_result", result);
-  }
-
-  /**
-   * Forward transcription error from provider to client socket
-   */
-  forwardTranscriptionError(socket: Socket, error: any): void {
-    socket.emit("transcription_error", error);
+    // Provider listeners are set up in the StartTranscription use case
   }
 }
